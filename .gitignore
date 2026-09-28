@@ -1,0 +1,4 @@
+.venv/
+Kronos/
+output/
+__pycache__/
