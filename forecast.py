@@ -106,8 +106,9 @@ def fetch_yfinance(ticker: str, lookback: int) -> pd.DataFrame:
     return finish_candles(df, ticker, lookback)
 
 
-def fetch_mt5(symbol: str, lookback: int) -> pd.DataFrame:
-    """Last `lookback` completed H1 bars from a running MetaTrader 5 terminal, in broker server time.
+def fetch_mt5(symbol: str, lookback: int, timeframe: str = "H1") -> pd.DataFrame:
+    """Last `lookback` completed bars (MT5 timeframe name, e.g. H1, M15, D1) from a running
+    MetaTrader 5 terminal, in broker server time.
 
     Uses the account the terminal is logged into, or MT5_LOGIN / MT5_PASSWORD / MT5_SERVER if set.
     """
@@ -126,9 +127,9 @@ def fetch_mt5(symbol: str, lookback: int) -> pd.DataFrame:
         if not mt5.symbol_select(symbol, True):
             sys.exit(f"symbol {symbol!r} not found in MT5 (check the exact name in Market Watch, e.g. XAUUSD or GOLD)")
         # Position 0 is the still-forming bar; start at 1 so only closed candles are used.
-        rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 1, lookback)
+        rates = mt5.copy_rates_from_pos(symbol, getattr(mt5, f"TIMEFRAME_{timeframe}"), 1, lookback)
         if rates is None or len(rates) == 0:
-            sys.exit(f"MT5 returned no H1 bars for {symbol!r}: {mt5.last_error()}")
+            sys.exit(f"MT5 returned no {timeframe} bars for {symbol!r}: {mt5.last_error()}")
     finally:
         mt5.shutdown()
 
@@ -136,7 +137,7 @@ def fetch_mt5(symbol: str, lookback: int) -> pd.DataFrame:
     df.index = pd.to_datetime(df["time"], unit="s")
     # Spot FX and metals have no exchange volume; tick volume is the usual stand-in.
     df["volume"] = df["real_volume"] if df["real_volume"].any() else df["tick_volume"]
-    return finish_candles(df, symbol, lookback)
+    return finish_candles(df, f"{symbol} {timeframe}", lookback)
 
 
 def load_csv(path: Path, lookback: int) -> pd.DataFrame:
@@ -163,23 +164,27 @@ def load_csv(path: Path, lookback: int) -> pd.DataFrame:
     return finish_candles(df, str(path), lookback)
 
 
-def future_timestamps(index: pd.DatetimeIndex, n: int) -> pd.Series:
-    """Next `n` hourly bar times, restricted to the (weekday, hour, minute) slots seen in history.
+def future_timestamps(index: pd.DatetimeIndex, n: int, step: pd.Timedelta = pd.Timedelta(hours=1)) -> pd.Series:
+    """Next `n` bar times, `step` apart.
 
-    That gives every hour for 24/7 markets like crypto, and only session hours
-    on trading days for equities, FX and metals.
+    When the history covers at least a week, only (weekday, hour, minute) slots
+    seen in it are used: every hour for 24/7 markets like crypto, session hours
+    on trading days for equities, FX and metals. Shorter histories (e.g. 400
+    one-minute bars) can't show the weekly pattern, so they just step forward.
     """
-    slots = set(zip(index.dayofweek, index.hour, index.minute))
+    slots = None
+    if index[-1] - index[0] >= pd.Timedelta(days=7):
+        slots = set(zip(index.dayofweek, index.hour, index.minute))
     out, t = [], index[-1]
     while len(out) < n:
-        t += pd.Timedelta(hours=1)
-        if (t.dayofweek, t.hour, t.minute) in slots:
+        t += step
+        if slots is None or (t.dayofweek, t.hour, t.minute) in slots:
             out.append(t)
     return pd.Series(out)
 
 
 def sample_paths(predictor: KronosPredictor, candles: pd.DataFrame, y_timestamp: pd.Series,
-                 args: argparse.Namespace) -> np.ndarray:
+                 args: argparse.Namespace, verbose: bool = True) -> np.ndarray:
     """Run the predictor `args.runs` times (sample_count=1 each); returns close paths, shape (runs, pred_len)."""
     x_timestamp = pd.Series(candles.index)
     paths = []
@@ -197,8 +202,9 @@ def sample_paths(predictor: KronosPredictor, candles: pd.DataFrame, y_timestamp:
             verbose=False,
         )
         paths.append(pred["close"].to_numpy())
-        print(f"  run {i + 1:>2}/{args.runs}: close in {args.pred_len}h = {paths[-1][-1]:,.2f} "
-              f"({time.perf_counter() - start:.1f}s)")
+        if verbose:
+            print(f"  run {i + 1:>2}/{args.runs}: close in {args.pred_len}h = {paths[-1][-1]:,.2f} "
+                  f"({time.perf_counter() - start:.1f}s)")
     return np.vstack(paths)
 
 

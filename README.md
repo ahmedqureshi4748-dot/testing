@@ -41,5 +41,31 @@ Options: `--lookback` (400), `--pred-len` hours (24), `--runs` (20),
 `--plot-history` (120), `--out-dir` (`output/`). The CSV holds the p05/median/p95
 bands plus every run's close path.
 
+## Every timeframe at once (mtf_forecast.py)
+
+`mtf_forecast.py` forecasts the next 12 candles on 1d, 4h, 2h, 1h, 30m, 15m,
+5m, 3m and 1m (20 runs each), prints a table of which way each timeframe
+leans, and pools the runs into three verdicts: **short-term** (1m+3m+5m+15m),
+**intraday** (30m–4h) and **overall**.
+
+```bash
+# Windows, MT5 terminal open and logged in (live bars, no API key needed)
+.venv\Scripts\pip install MetaTrader5
+.venv\Scripts\python mtf_forecast.py XAUUSD --mt5
+
+# Any OS: a folder of MT5 exports named XAUUSD_M1.csv, XAUUSD_M3.csv, ..., XAUUSD_D1.csv
+.venv/bin/python mtf_forecast.py XAUUSD --csv-dir exports/
+
+# Fewer timeframes or a longer horizon
+.venv/bin/python mtf_forecast.py XAUUSD --mt5 --timeframes H4,H1,M15 --pred-len 24
+```
+
+The table shows, per timeframe: last close, the move over the last 12 bars,
+the next candle's median close, the median and 5–95% range 12 candles out,
+how many runs end higher, and the call. It is saved as
+`output/XAUUSD_mtf.csv`, and `output/XAUUSD_mtf.png` has one chart per
+timeframe with the verdicts on top. On a 4-core CPU the full set takes about
+3 minutes.
+
 Needs network access to `huggingface.co` (model weights) and Yahoo Finance
 (`*.finance.yahoo.com`, `fc.yahoo.com`, `guce.yahoo.com`).
