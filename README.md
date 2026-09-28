@@ -41,6 +41,19 @@ Options: `--lookback` (400), `--pred-len` hours (24), `--runs` (20),
 `--plot-history` (120), `--out-dir` (`output/`). The CSV holds the p05/median/p95
 bands plus every run's close path.
 
+## Windows: one double-click for XAUUSD
+
+1. Download this branch as a ZIP:
+   https://github.com/ahmedqureshi4748-dot/testing/archive/refs/heads/claude/kronos-yfinance-forecast-r8puf6.zip
+   and unzip it.
+2. Open MetaTrader 5 and log in.
+3. Double-click `run_xauusd.bat`.
+
+It installs Python 3.12 if needed (via winget), downloads Kronos, installs the
+packages (first run only, a few minutes), runs `mtf_forecast.py XAUUSD --mt5`,
+and opens the `output` folder. Pass other arguments from a Command Prompt, e.g.
+`run_xauusd.bat GOLD --mt5 --pred-len 24`.
+
 ## Every timeframe at once (mtf_forecast.py)
 
 `mtf_forecast.py` forecasts the next 12 candles on 1d, 4h, 2h, 1h, 30m, 15m,
